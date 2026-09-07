@@ -1,0 +1,11 @@
+bin/
+tmp/
+*.log
+.env
+.env.*
+!.env.example
+.git/
+.gitignore
+docker-compose.yml
+*.md
+docs/
