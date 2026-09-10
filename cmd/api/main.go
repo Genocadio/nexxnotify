@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -75,6 +76,11 @@ func run(logger *slog.Logger) error {
 	}
 	logger.Info("providers seeded")
 
+	if err := seedVerificationFlows(ctx, pool); err != nil {
+		return err
+	}
+	logger.Info("verification flows seeded")
+
 	srv := &http.Server{
 		Addr:              ":" + cfg.Port,
 		Handler:           httpapi.NewServer(logger, reg, pool, db.New(pool)),
@@ -140,6 +146,82 @@ func seedProviders(ctx context.Context, pool *pgxpool.Pool, reg *provider.Regist
 		}
 		if _, err := q.SeedProvider(ctx, db.SeedProviderParams{ID: p.Name(), DisplayName: displayName}); err != nil {
 			return fmt.Errorf("seed provider %s: %w", p.Name(), err)
+		}
+	}
+	return nil
+}
+
+// seedVerificationFlows creates the flows the nexxauth service relies on for
+// OTP and magic-link delivery (otp_email, otp_sms, link_email, link_sms) when
+// they do not exist yet. Idempotent by design: an existing flow or channel is
+// left untouched, so admin edits to templates or content survive restarts.
+func seedVerificationFlows(ctx context.Context, pool *pgxpool.Pool) error {
+	type flowSeed struct {
+		id, name, channel, variable string
+		subject, body, html         string
+	}
+	seeds := []flowSeed{
+		{
+			id: "otp_email", name: "Verification code (email)", channel: "email", variable: "code",
+			subject: "Your Nexxserve verification code",
+			body:    "Your Nexxserve verification code is {{code}}. It expires in a few minutes.",
+			html:    "<p>Your Nexxserve verification code is <strong>{{code}}</strong>. It expires in a few minutes.</p>",
+		},
+		{
+			id: "otp_sms", name: "Verification code (SMS)", channel: "sms", variable: "code",
+			body: "Your Nexxserve verification code is {{code}}.",
+		},
+		{
+			id: "link_email", name: "Verification link (email)", channel: "email", variable: "link",
+			subject: "Verify your Nexxserve account",
+			body:    "Click this link to complete verification: {{link}}",
+			html:    "<p>Click <a href=\"{{link}}\">here</a> to complete verification. This link expires in 30 minutes.</p>",
+		},
+		{
+			id: "link_sms", name: "Verification link (SMS)", channel: "sms", variable: "link",
+			body: "Complete verification here: {{link}}",
+		},
+	}
+
+	for _, s := range seeds {
+		inputContract, err := json.Marshal(map[string]any{
+			"allows_content":   false,
+			"allows_variables": true,
+			"variables": map[string]any{
+				s.variable: map[string]any{"type": "string", "required": true},
+			},
+		})
+		if err != nil {
+			return fmt.Errorf("seed flow %s: marshal input contract: %w", s.id, err)
+		}
+
+		content := map[string]any{"body": s.body}
+		if s.subject != "" {
+			content["subject"] = s.subject
+		}
+		if s.html != "" {
+			content["html"] = s.html
+		}
+		defaultContent, err := json.Marshal(content)
+		if err != nil {
+			return fmt.Errorf("seed flow %s: marshal default content: %w", s.id, err)
+		}
+		requiredVars, err := json.Marshal([]string{s.variable})
+		if err != nil {
+			return fmt.Errorf("seed flow %s: marshal required variables: %w", s.id, err)
+		}
+
+		if _, err := pool.Exec(ctx, `
+INSERT INTO flows (id, name, active, input_contract)
+VALUES ($1, $2, true, $3::jsonb)
+ON CONFLICT (id) DO NOTHING`, s.id, s.name, string(inputContract)); err != nil {
+			return fmt.Errorf("seed flow %s: %w", s.id, err)
+		}
+		if _, err := pool.Exec(ctx, `
+INSERT INTO flow_channels (flow_id, channel, enabled, uses_template, default_content, required_variables, channel_config)
+VALUES ($1, $2, true, false, $3::jsonb, $4::jsonb, '{}'::jsonb)
+ON CONFLICT (flow_id, channel) DO NOTHING`, s.id, s.channel, string(defaultContent), string(requiredVars)); err != nil {
+			return fmt.Errorf("seed flow channel %s/%s: %w", s.id, s.channel, err)
 		}
 	}
 	return nil
