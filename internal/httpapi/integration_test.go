@@ -45,13 +45,23 @@ func setupTestEnv(t *testing.T) *testEnv {
 
 	pool, err := pgxpool.New(ctx, dsn)
 	if err != nil {
-		t.Fatalf("connect to test database: %v", err)
+		t.Skipf("connect to test database (skipping): %v", err)
+	}
+	if err := pool.Ping(ctx); err != nil {
+		pool.Close()
+		t.Skipf("ping test database at %s (skipping): %v", dsn, err)
 	}
 	t.Cleanup(func() { pool.Close() })
 
 	// Run migrations
 	if err := db.MigrateUp(dsn); err != nil {
 		t.Fatalf("migrate: %v", err)
+	}
+
+	// Seed providers in database
+	q := db.New(pool)
+	for _, pid := range []string{"twilio", "infobip", "resend", "smtp", "ses", "fcm"} {
+		_, _ = q.SeedProvider(ctx, db.SeedProviderParams{ID: pid, DisplayName: pid})
 	}
 
 	// Seed providers (empty registry — no providers configured)
@@ -175,7 +185,7 @@ func TestIntegration_FlowCRUD(t *testing.T) {
 		},
 		"channels": []map[string]any{
 			{
-				"channel":      "sms",
+				"channel":       "sms",
 				"uses_template": false,
 				"default_content": map[string]any{
 					"body": "Your code is {{code}}",
@@ -230,7 +240,7 @@ func TestIntegration_FlowCRUD(t *testing.T) {
 
 	// 5. Add a second channel
 	code, _ = doReq(t, env, "POST", "/flows/"+flowID+"/channels", map[string]any{
-		"channel":      "email",
+		"channel":       "email",
 		"uses_template": false,
 		"default_content": map[string]any{
 			"subject": "Your code",
@@ -282,7 +292,7 @@ func TestIntegration_Send_VariablesOnly(t *testing.T) {
 		},
 		"channels": []map[string]any{
 			{
-				"channel":      "sms",
+				"channel":       "sms",
 				"uses_template": false,
 				"default_content": map[string]any{
 					"body": "Hi {{name}}, your code is {{code}}",
@@ -290,7 +300,7 @@ func TestIntegration_Send_VariablesOnly(t *testing.T) {
 				"required_variables": []string{"code"},
 			},
 			{
-				"channel":      "email",
+				"channel":       "email",
 				"uses_template": false,
 				"default_content": map[string]any{
 					"subject": "Your Code",
@@ -495,13 +505,13 @@ func TestIntegration_Send_ChannelContentOverride(t *testing.T) {
 		},
 		"channels": []map[string]any{
 			{
-				"channel":      "sms",
-				"uses_template": false,
+				"channel":         "sms",
+				"uses_template":   false,
 				"default_content": map[string]any{"body": "Default: Hi {{name}}"},
 			},
 			{
-				"channel":      "email",
-				"uses_template": false,
+				"channel":         "email",
+				"uses_template":   false,
 				"default_content": map[string]any{"subject": "Default Subject", "body": "Default email for {{name}}"},
 			},
 		},
@@ -604,7 +614,7 @@ func TestIntegration_Send_InactiveFlow(t *testing.T) {
 
 	// Send should fail
 	code, result := doReq(t, env, "POST", "/send", map[string]any{
-		"flow_id":  flowID,
+		"flow_id":   flowID,
 		"receivers": []map[string]any{{"name": "Test", "phone": "+111"}},
 	})
 	if code != 400 {
@@ -616,7 +626,7 @@ func TestIntegration_Send_NonexistentFlow(t *testing.T) {
 	env := setupTestEnv(t)
 
 	code, _ := doReq(t, env, "POST", "/send", map[string]any{
-		"flow_id":  "does_not_exist_" + uid(),
+		"flow_id":   "does_not_exist_" + uid(),
 		"receivers": []map[string]any{{"name": "Test", "phone": "+111"}},
 	})
 	if code != 404 {
@@ -629,9 +639,9 @@ func TestIntegration_Send_EmptyReceivers(t *testing.T) {
 	flowID := "empty_recv" + uid()
 
 	code, _ := doReq(t, env, "POST", "/flows", map[string]any{
-		"id":     flowID,
-		"name":   "Empty Receivers",
-		"input":  map[string]any{},
+		"id":    flowID,
+		"name":  "Empty Receivers",
+		"input": map[string]any{},
 		"channels": []map[string]any{
 			{"channel": "sms", "uses_template": false, "default_content": map[string]any{"body": "hi"}},
 		},
@@ -646,5 +656,301 @@ func TestIntegration_Send_EmptyReceivers(t *testing.T) {
 	})
 	if code != 400 {
 		t.Errorf("expected 400 for empty receivers, got %d", code)
+	}
+}
+
+func randCountryCode() string {
+	letters := "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+	return string([]byte{letters[rand.Intn(len(letters))], letters[rand.Intn(len(letters))]})
+}
+
+func TestIntegration_Providers(t *testing.T) {
+	env := setupTestEnv(t)
+
+	code, body := doReq(t, env, "GET", "/providers", nil)
+	if code != 200 {
+		t.Fatalf("expected 200, got %d", code)
+	}
+	if _, ok := body["providers"]; !ok {
+		t.Fatalf("expected providers key in response, got %v", body)
+	}
+}
+
+func TestIntegration_CountryCRUD(t *testing.T) {
+	env := setupTestEnv(t)
+	cc := randCountryCode()
+
+	code, errResp := doReq(t, env, "POST", "/countries", map[string]any{
+		"code":         "INVALID",
+		"phone_code":   "123",
+		"total_digits": 10,
+	})
+	if code != 400 {
+		t.Errorf("expected 400 for invalid country code, got %d: %v", code, errResp)
+	}
+
+	code, created := doReq(t, env, "POST", "/countries", map[string]any{
+		"code":         cc,
+		"phone_code":   "+234",
+		"total_digits": 10,
+	})
+	if code != 201 {
+		t.Fatalf("create country: expected 201, got %d — %v", code, created)
+	}
+	t.Cleanup(func() {
+		_, _ = doReq(t, env, "DELETE", "/countries/"+cc, nil)
+	})
+	if created["code"] != cc || created["phone_code"] != "234" {
+		t.Errorf("unexpected country data: %v", created)
+	}
+
+	code, _ = doReq(t, env, "POST", "/countries", map[string]any{
+		"code":         cc,
+		"phone_code":   "234",
+		"total_digits": 10,
+	})
+	if code != 409 {
+		t.Errorf("expected 409 for duplicate country, got %d", code)
+	}
+
+	code, got := doReq(t, env, "GET", "/countries/"+cc, nil)
+	if code != 200 {
+		t.Fatalf("get country: expected 200, got %d", code)
+	}
+	if got["code"] != cc {
+		t.Errorf("expected %s, got %v", cc, got["code"])
+	}
+
+	code, _ = doReq(t, env, "GET", "/countries/ZZ", nil)
+	if code != 404 {
+		t.Errorf("expected 404 for unknown country, got %d", code)
+	}
+
+	code, list := doReq(t, env, "GET", "/countries", nil)
+	if code != 200 {
+		t.Fatalf("list countries: expected 200, got %d", code)
+	}
+	countries := list["countries"].([]any)
+	if len(countries) == 0 {
+		t.Errorf("expected non-empty countries list")
+	}
+
+	code, _ = doReq(t, env, "DELETE", "/countries/"+cc, nil)
+	if code != 204 {
+		t.Fatalf("delete country: expected 204, got %d", code)
+	}
+
+	code, _ = doReq(t, env, "DELETE", "/countries/ZZ", nil)
+	if code != 404 {
+		t.Errorf("expected 404 for deleting nonexistent country, got %d", code)
+	}
+}
+
+func TestIntegration_CarrierCRUD(t *testing.T) {
+	env := setupTestEnv(t)
+	cc := randCountryCode()
+
+	code, _ := doReq(t, env, "POST", "/countries", map[string]any{
+		"code":         cc,
+		"phone_code":   "254",
+		"total_digits": 9,
+	})
+	if code != 201 {
+		t.Fatalf("setup country %s failed: %d", cc, code)
+	}
+	t.Cleanup(func() {
+		_, _ = doReq(t, env, "DELETE", "/countries/"+cc, nil)
+	})
+
+	code, carrier := doReq(t, env, "POST", "/carriers", map[string]any{
+		"country_code": cc,
+		"name":         "Safaricom",
+		"prefixes":     []string{"701", "702"},
+	})
+	if code != 201 {
+		t.Fatalf("create carrier: expected 201, got %d — %v", code, carrier)
+	}
+	carrierID := carrier["id"].(string)
+	t.Cleanup(func() {
+		_, _ = doReq(t, env, "DELETE", "/carriers/"+carrierID, nil)
+	})
+
+	code, _ = doReq(t, env, "POST", "/carriers", map[string]any{
+		"country_code": cc,
+		"name":         "Safaricom",
+		"prefixes":     []string{"703"},
+	})
+	if code != 409 {
+		t.Errorf("expected 409 for duplicate carrier, got %d", code)
+	}
+
+	code, _ = doReq(t, env, "GET", "/carriers", nil)
+	if code != 400 {
+		t.Errorf("expected 400 when country param is missing, got %d", code)
+	}
+
+	code, list := doReq(t, env, "GET", "/carriers?country="+cc, nil)
+	if code != 200 {
+		t.Fatalf("list carriers: expected 200, got %d", code)
+	}
+	carriers := list["carriers"].([]any)
+	if len(carriers) != 1 {
+		t.Errorf("expected 1 carrier, got %d", len(carriers))
+	}
+
+	code, got := doReq(t, env, "GET", "/carriers/"+carrierID, nil)
+	if code != 200 {
+		t.Fatalf("get carrier: expected 200, got %d", code)
+	}
+	if got["name"] != "Safaricom" {
+		t.Errorf("expected carrier name Safaricom, got %v", got["name"])
+	}
+
+	code, _ = doReq(t, env, "DELETE", "/carriers/"+carrierID, nil)
+	if code != 204 {
+		t.Fatalf("delete carrier: expected 204, got %d", code)
+	}
+
+	code, _ = doReq(t, env, "DELETE", "/countries/"+cc, nil)
+	if code != 204 {
+		t.Fatalf("delete country: expected 204, got %d", code)
+	}
+}
+
+func TestIntegration_PricingCRUD(t *testing.T) {
+	env := setupTestEnv(t)
+	cc := randCountryCode()
+
+	code, _ := doReq(t, env, "POST", "/countries", map[string]any{
+		"code":         cc,
+		"phone_code":   "233",
+		"total_digits": 9,
+	})
+	if code != 201 {
+		t.Fatalf("setup country %s failed: %d", cc, code)
+	}
+	t.Cleanup(func() {
+		_, _ = doReq(t, env, "DELETE", "/countries/"+cc, nil)
+	})
+
+	code, carrier := doReq(t, env, "POST", "/carriers", map[string]any{
+		"country_code": cc,
+		"name":         "MTN",
+		"prefixes":     []string{"24", "54"},
+	})
+	if code != 201 {
+		t.Fatalf("setup carrier MTN failed: %d", code)
+	}
+	carrierID := carrier["id"].(string)
+	t.Cleanup(func() {
+		_, _ = doReq(t, env, "DELETE", "/carriers/"+carrierID, nil)
+	})
+
+	code, pricing := doReq(t, env, "POST", "/pricing", map[string]any{
+		"provider":     "twilio",
+		"channel":      "sms",
+		"country_code": cc,
+		"carrier_id":   carrierID,
+		"tiers": []map[string]any{
+			{"min_volume": 0, "max_volume": 999, "tier_price": "0.05"},
+			{"min_volume": 1000, "max_volume": 4999, "tier_price": "0.04"},
+		},
+	})
+	if code != 201 {
+		t.Fatalf("create pricing: expected 201, got %d — %v", code, pricing)
+	}
+	pricingID := pricing["id"].(string)
+	t.Cleanup(func() {
+		_, _ = doReq(t, env, "DELETE", "/pricing/"+pricingID, nil)
+	})
+
+	tiers := pricing["tiers"].([]any)
+	if len(tiers) != 2 {
+		t.Fatalf("expected 2 tiers, got %d", len(tiers))
+	}
+
+	code, emailPricing := doReq(t, env, "POST", "/pricing", map[string]any{
+		"provider": "resend",
+		"channel":  "email",
+		"tiers": []map[string]any{
+			{"min_volume": 0, "max_volume": 10000, "tier_price": "0.001"},
+		},
+	})
+	if code != 201 {
+		t.Fatalf("create email pricing: expected 201, got %d — %v", code, emailPricing)
+	}
+	emailPricingID := emailPricing["id"].(string)
+	t.Cleanup(func() {
+		_, _ = doReq(t, env, "DELETE", "/pricing/"+emailPricingID, nil)
+	})
+
+	code, _ = doReq(t, env, "POST", "/pricing", map[string]any{
+		"provider":     "resend",
+		"channel":      "email",
+		"country_code": cc,
+	})
+	if code != 400 {
+		t.Errorf("expected 400 for email pricing with country_code, got %d", code)
+	}
+
+	code, got := doReq(t, env, "GET", "/pricing/"+pricingID, nil)
+	if code != 200 {
+		t.Fatalf("get pricing: expected 200, got %d", code)
+	}
+	if got["provider"] != "twilio" || got["channel"] != "sms" {
+		t.Errorf("unexpected pricing details: %v", got)
+	}
+
+	code, list := doReq(t, env, "GET", "/pricing?provider=twilio&channel=sms&country="+cc, nil)
+	if code != 200 {
+		t.Fatalf("list pricing: expected 200, got %d", code)
+	}
+	pricingList := list["pricing"].([]any)
+	if len(pricingList) != 1 {
+		t.Errorf("expected 1 pricing result, got %d", len(pricingList))
+	}
+
+	code, newTier := doReq(t, env, "POST", "/pricing/"+pricingID+"/tiers", map[string]any{
+		"min_volume": 5000,
+		"max_volume": 10000,
+		"tier_price": "0.03",
+	})
+	if code != 201 {
+		t.Fatalf("add tier: expected 201, got %d — %v", code, newTier)
+	}
+	tierID := newTier["id"].(string)
+
+	code, _ = doReq(t, env, "POST", "/pricing/"+pricingID+"/tiers", map[string]any{
+		"min_volume": 2000,
+		"max_volume": 3000,
+		"tier_price": "0.035",
+	})
+	if code != 409 {
+		t.Errorf("expected 409 for overlapping tier, got %d", code)
+	}
+
+	code, _ = doReq(t, env, "DELETE", "/pricing/"+pricingID+"/tiers/"+tierID, nil)
+	if code != 204 {
+		t.Fatalf("delete tier: expected 204, got %d", code)
+	}
+
+	code, _ = doReq(t, env, "DELETE", "/pricing/"+pricingID, nil)
+	if code != 204 {
+		t.Fatalf("delete pricing: expected 204, got %d", code)
+	}
+
+	code, _ = doReq(t, env, "DELETE", "/pricing/"+emailPricingID, nil)
+	if code != 204 {
+		t.Fatalf("delete email pricing: expected 204, got %d", code)
+	}
+
+	code, _ = doReq(t, env, "DELETE", "/carriers/"+carrierID, nil)
+	if code != 204 {
+		t.Fatalf("delete carrier: expected 204, got %d", code)
+	}
+
+	code, _ = doReq(t, env, "DELETE", "/countries/"+cc, nil)
+	if code != 204 {
+		t.Fatalf("delete country: expected 204, got %d", code)
 	}
 }

@@ -111,7 +111,7 @@ func (p *SMTP) SendEmail(ctx context.Context, msg EmailMessage) (SendResult, err
 	var conn net.Conn
 	var err error
 
-	 dialCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	dialCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 
 	dialer := &net.Dialer{Timeout: 10 * time.Second}

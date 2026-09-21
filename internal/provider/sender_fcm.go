@@ -16,8 +16,8 @@ type fcmV1Request struct {
 }
 
 type fcmV1Message struct {
-	Token string            `json:"token"`
-	Notification *fcmNotification `json:"notification,omitempty"`
+	Token        string            `json:"token"`
+	Notification *fcmNotification  `json:"notification,omitempty"`
 	Data         map[string]string `json:"data,omitempty"`
 }
 

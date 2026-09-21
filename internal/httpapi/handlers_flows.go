@@ -18,44 +18,44 @@ import (
 // --- Flow CRUD ---
 
 type flowView struct {
-	ID            string           `json:"id"`
-	Name          string           `json:"name"`
-	Active        bool             `json:"active"`
+	ID            string             `json:"id"`
+	Name          string             `json:"name"`
+	Active        bool               `json:"active"`
 	InputContract flow.InputContract `json:"input"`
-	Channels      []flowChannelView `json:"channels,omitempty"`
-	CreatedAt     string           `json:"created_at"`
-	UpdatedAt     string           `json:"updated_at"`
+	Channels      []flowChannelView  `json:"channels,omitempty"`
+	CreatedAt     string             `json:"created_at"`
+	UpdatedAt     string             `json:"updated_at"`
 }
 
 type flowChannelView struct {
-	ID                 string              `json:"id"`
-	Channel            string              `json:"channel"`
-	Enabled            bool                `json:"enabled"`
-	UsesTemplate       bool                `json:"uses_template"`
-	TemplateName       string              `json:"template_name,omitempty"`
-	TemplateParamOrder []string            `json:"template_param_order,omitempty"`
+	ID                 string               `json:"id"`
+	Channel            string               `json:"channel"`
+	Enabled            bool                 `json:"enabled"`
+	UsesTemplate       bool                 `json:"uses_template"`
+	TemplateName       string               `json:"template_name,omitempty"`
+	TemplateParamOrder []string             `json:"template_param_order,omitempty"`
 	DefaultContent     *flow.MessageContent `json:"default_content,omitempty"`
-	RequiredVariables  []string            `json:"required_variables"`
-	ChannelConfig      map[string]any      `json:"channel_config,omitempty"`
+	RequiredVariables  []string             `json:"required_variables"`
+	ChannelConfig      map[string]any       `json:"channel_config,omitempty"`
 }
 
 type createFlowReq struct {
-	ID            string                `json:"id"`
-	Name          string                `json:"name"`
-	Active        *bool                 `json:"active"`
-	InputContract *flow.InputContract   `json:"input"`
+	ID            string                 `json:"id"`
+	Name          string                 `json:"name"`
+	Active        *bool                  `json:"active"`
+	InputContract *flow.InputContract    `json:"input"`
 	Channels      []createFlowChannelReq `json:"channels"`
 }
 
 type createFlowChannelReq struct {
-	Channel            string                `json:"channel"`
-	Enabled            *bool                 `json:"enabled"`
-	UsesTemplate       *bool                 `json:"uses_template"`
-	TemplateName       string                `json:"template_name"`
-	TemplateParamOrder []string              `json:"template_param_order"`
-	DefaultContent     *flow.MessageContent  `json:"default_content"`
-	RequiredVariables  []string              `json:"required_variables"`
-	ChannelConfig      map[string]any        `json:"channel_config"`
+	Channel            string               `json:"channel"`
+	Enabled            *bool                `json:"enabled"`
+	UsesTemplate       *bool                `json:"uses_template"`
+	TemplateName       string               `json:"template_name"`
+	TemplateParamOrder []string             `json:"template_param_order"`
+	DefaultContent     *flow.MessageContent `json:"default_content"`
+	RequiredVariables  []string             `json:"required_variables"`
+	ChannelConfig      map[string]any       `json:"channel_config"`
 }
 
 func (s *Server) createFlow(w http.ResponseWriter, r *http.Request) {
@@ -175,9 +175,9 @@ func (s *Server) listFlows(w http.ResponseWriter, r *http.Request) {
 }
 
 type updateFlowReq struct {
-	Name          *string              `json:"name"`
-	Active        *bool                `json:"active"`
-	InputContract *flow.InputContract  `json:"input"`
+	Name          *string             `json:"name"`
+	Active        *bool               `json:"active"`
+	InputContract *flow.InputContract `json:"input"`
 }
 
 func (s *Server) updateFlow(w http.ResponseWriter, r *http.Request) {
@@ -408,5 +408,3 @@ func flowChannelDBToView(ch db.FlowChannel) flowChannelView {
 	}
 	return view
 }
-
-

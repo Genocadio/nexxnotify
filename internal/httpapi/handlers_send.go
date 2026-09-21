@@ -15,17 +15,17 @@ import (
 type sendReq struct {
 	FlowID           string                          `json:"flow_id"`
 	ID               string                          `json:"id"`
-	Variables        map[string]any                   `json:"variables,omitempty"`
-	Content          *flow.MessageContent             `json:"content,omitempty"`
-	ChannelContent   map[string]*flow.MessageContent  `json:"channel_content,omitempty"`
-	ChannelVariables map[string]map[string]any        `json:"channel_variables,omitempty"`
-	Receivers        []flow.Receiver                  `json:"receivers"`
+	Variables        map[string]any                  `json:"variables,omitempty"`
+	Content          *flow.MessageContent            `json:"content,omitempty"`
+	ChannelContent   map[string]*flow.MessageContent `json:"channel_content,omitempty"`
+	ChannelVariables map[string]map[string]any       `json:"channel_variables,omitempty"`
+	Receivers        []flow.Receiver                 `json:"receivers"`
 }
 
 type sendResponse struct {
-	ID      string                 `json:"id"`
-	Status  string                 `json:"status"`
-	Results []sendDeliveryResult   `json:"results"`
+	ID      string               `json:"id"`
+	Status  string               `json:"status"`
+	Results []sendDeliveryResult `json:"results"`
 }
 
 type sendDeliveryResult struct {
@@ -96,10 +96,10 @@ func (s *Server) handleSend(w http.ResponseWriter, r *http.Request) {
 	}
 
 	fc := &flow.FlowConfig{
-		ID:      flowRow.ID,
-		Name:    flowRow.Name,
-		Active:  flowRow.Active,
-		Input:   inputContract,
+		ID:       flowRow.ID,
+		Name:     flowRow.Name,
+		Active:   flowRow.Active,
+		Input:    inputContract,
 		Channels: make([]flow.ChannelConfig, 0, len(dbChannels)),
 	}
 

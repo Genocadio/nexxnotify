@@ -15,8 +15,8 @@ func TestValidateRequest(t *testing.T) {
 			AllowsContent:   true,
 			AllowsVariables: true,
 			Variables: map[string]VariableSchema{
-				"name":    {Type: "string", Required: true},
-				"orderId": {Type: "string", Required: true},
+				"name":     {Type: "string", Required: true},
+				"orderId":  {Type: "string", Required: true},
 				"discount": {Type: "number", Required: false},
 			},
 		},
@@ -75,8 +75,8 @@ func TestValidateRequest(t *testing.T) {
 
 	t.Run("content allowed passes validation", func(t *testing.T) {
 		req := &ReceiveRequest{
-			FlowID: "test-flow",
-			Content: &MessageContent{Body: "hello"},
+			FlowID:    "test-flow",
+			Content:   &MessageContent{Body: "hello"},
 			Variables: map[string]any{"name": "John", "orderId": "123"},
 			Receivers: []Receiver{{Name: "John"}},
 		}
@@ -95,8 +95,8 @@ func TestValidateRequest(t *testing.T) {
 			},
 		}
 		req := &ReceiveRequest{
-			FlowID: "test-flow",
-			Content: &MessageContent{Body: "hello"},
+			FlowID:    "test-flow",
+			Content:   &MessageContent{Body: "hello"},
 			Receivers: []Receiver{{Name: "John"}},
 		}
 		errs := ValidateRequest(fc2, req)
@@ -110,7 +110,7 @@ func TestValidateRequest(t *testing.T) {
 			Active: false,
 		}
 		req := &ReceiveRequest{
-			FlowID: "test-flow",
+			FlowID:    "test-flow",
 			Receivers: []Receiver{{Name: "John"}},
 		}
 		errs := ValidateRequest(fc2, req)
@@ -189,10 +189,10 @@ func TestResolve_Template(t *testing.T) {
 		},
 		Channels: []ChannelConfig{
 			{
-				Channel:      "whatsapp",
-				Enabled:      true,
-				UsesTemplate: true,
-				TemplateName: "order_shipped_wa_v2",
+				Channel:            "whatsapp",
+				Enabled:            true,
+				UsesTemplate:       true,
+				TemplateName:       "order_shipped_wa_v2",
 				TemplateParamOrder: []string{"customerName", "trackingId"},
 				DefaultContent: &MessageContent{
 					Body: "Hi {{customerName}}, your order {{trackingId}} has shipped.",

@@ -1,4 +1,10 @@
-.PHONY: run build vet test fmt tidy sqlc db-up db-down
+.PHONY: run build vet test fmt tidy sqlc db-up db-down up down
+
+up:
+	docker compose up --build -d
+
+down:
+	docker compose down
 
 run:
 	go run ./cmd/api
