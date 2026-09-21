@@ -65,6 +65,23 @@ func TestLoad_SMTP(t *testing.T) {
 		}
 	})
 
+	t.Run("valid smtp with user/pass/admin_email aliases", func(t *testing.T) {
+		env := map[string]string{
+			"SMTP_HOST":        "smtp.example.com",
+			"SMTP_PORT":        "587",
+			"SMTP_USER":        "user@example.com",
+			"SMTP_PASS":        "secretpassword",
+			"SMTP_ADMIN_EMAIL": "admin@example.com",
+		}
+		cfg, err := Load(func(k string) string { return env[k] })
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if cfg.SMTP.Username != "user@example.com" || cfg.SMTP.Password != "secretpassword" || cfg.SMTP.From != "admin@example.com" {
+			t.Errorf("unexpected SMTP config from aliases: %+v", cfg.SMTP)
+		}
+	})
+
 	t.Run("default port and from", func(t *testing.T) {
 		env := map[string]string{
 			"SMTP_HOST":     "smtp.example.com",

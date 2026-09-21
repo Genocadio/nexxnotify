@@ -101,8 +101,17 @@ func Load(getenv Getenv) (*Config, error) {
 func loadSMTP(getenv Getenv, errs *[]string) SMTPConfig {
 	host := strings.TrimSpace(getenv("SMTP_HOST"))
 	username := strings.TrimSpace(getenv("SMTP_USERNAME"))
+	if username == "" {
+		username = strings.TrimSpace(getenv("SMTP_USER"))
+	}
 	password := getenv("SMTP_PASSWORD")
+	if password == "" {
+		password = getenv("SMTP_PASS")
+	}
 	from := strings.TrimSpace(getenv("SMTP_FROM"))
+	if from == "" {
+		from = strings.TrimSpace(getenv("SMTP_ADMIN_EMAIL"))
+	}
 
 	if host == "" {
 		if username != "" || password != "" || from != "" {
