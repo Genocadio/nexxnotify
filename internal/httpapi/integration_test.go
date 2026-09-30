@@ -79,7 +79,7 @@ func setupTestEnv(t *testing.T) *testEnv {
 
 	srv := &http.Server{
 		Addr:              fmt.Sprintf("127.0.0.1:%d", port),
-		Handler:           httpapi.NewServer(logger, reg, pool, db.New(pool)),
+		Handler:           httpapi.NewServer(logger, reg, pool, db.New(pool), "", "", nil),
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       15 * time.Second,
 		WriteTimeout:      30 * time.Second,

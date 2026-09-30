@@ -60,13 +60,24 @@ type Defaults struct {
 type Config struct {
 	Port        string
 	DatabaseURL string
-	SMTP        SMTPConfig
-	Resend      ResendConfig
-	Twilio      TwilioConfig
-	Infobip     InfobipConfig
-	SES         SESConfig
-	FCM         FCMConfig
-	Defaults    Defaults
+	// NexxauthURL is the base URL of the nexxauth service (informational / future callbacks).
+	NexxauthURL string
+	// APIKey, when non-empty, is required on every non-health request via X-Api-Key header.
+	// Set NEXXNOTIFY_API_KEY to the same value as NEXXAUTH nexxbotify.api-key.
+	APIKey string
+	// PublicKey is the PEM or Base64 Ed25519/RSA public key used to verify asymmetric
+	// single-use tokens signed by nexxauth.
+	PublicKey string
+	// AllowedIPs is a list of IPs or CIDRs allowed to call protected endpoints.
+	// Comma-separated, e.g. "1.2.3.4,10.0.0.0/8". Empty = no restriction.
+	AllowedIPs []string
+	SMTP   SMTPConfig
+	Resend ResendConfig
+	Twilio TwilioConfig
+	Infobip InfobipConfig
+	SES     SESConfig
+	FCM     FCMConfig
+	Defaults Defaults
 }
 
 type Getenv func(string) string
@@ -75,6 +86,18 @@ func Load(getenv Getenv) (*Config, error) {
 	cfg := &Config{
 		Port:        envOr(getenv, "PORT", "8080"),
 		DatabaseURL: envOr(getenv, "DATABASE_URL", "postgres://nexxnotify:nexxnotify@localhost:5433/nexxnotify?sslmode=disable"),
+		NexxauthURL: strings.TrimRight(strings.TrimSpace(getenv("NEXXAUTH_URL")), "/"),
+		APIKey:      strings.TrimSpace(getenv("NEXXNOTIFY_API_KEY")),
+		PublicKey:   loadPublicKey(getenv),
+	}
+
+	// Parse NEXXNOTIFY_ALLOWED_IPS: comma-separated IPs or CIDRs.
+	if raw := strings.TrimSpace(getenv("NEXXNOTIFY_ALLOWED_IPS")); raw != "" {
+		for _, part := range strings.Split(raw, ",") {
+			if ip := strings.TrimSpace(part); ip != "" {
+				cfg.AllowedIPs = append(cfg.AllowedIPs, ip)
+			}
+		}
 	}
 
 	var errs []string
@@ -294,4 +317,18 @@ func envOr(getenv Getenv, key, fallback string) string {
 		return v
 	}
 	return fallback
+}
+
+func loadPublicKey(getenv Getenv) string {
+	inline := strings.TrimSpace(getenv("NEXXNOTIFY_PUBLIC_KEY"))
+	file := strings.TrimSpace(getenv("NEXXNOTIFY_PUBLIC_KEY_FILE"))
+	if inline != "" {
+		return inline
+	}
+	if file != "" {
+		if data, err := os.ReadFile(file); err == nil {
+			return strings.TrimSpace(string(data))
+		}
+	}
+	return ""
 }

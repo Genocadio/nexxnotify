@@ -83,7 +83,7 @@ func run(logger *slog.Logger) error {
 
 	srv := &http.Server{
 		Addr:              ":" + cfg.Port,
-		Handler:           httpapi.NewServer(logger, reg, pool, db.New(pool)),
+		Handler:           httpapi.NewServer(logger, reg, pool, db.New(pool), cfg.APIKey, cfg.PublicKey, cfg.AllowedIPs),
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       15 * time.Second,
 		WriteTimeout:      30 * time.Second,
